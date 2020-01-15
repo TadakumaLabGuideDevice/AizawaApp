@@ -658,6 +658,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             else if (v.equals(startBt)) start();  //誘導開始用ボタン
             else if (v.equals(stopBt)) stop();    //誘導強制終了用ボタン
             else if (v.equals(voiceBt)) voice();  //音声入力用ボタン
+            else if (v.equals(saveBt)) save();  //音声入力用ボタン
         }
 
 
@@ -724,8 +725,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         private void save(){
             //内部ストレージにtxtファイル作成
-            String path = Environment.getExternalStorageDirectory().getPath() + "/" +  ".txt";
-            String[] paths = {Environment.getExternalStorageDirectory().toString() + "/" + ".txt"};
+            String path = Environment.getExternalStorageDirectory().getPath() + "/" +  "test.txt";
+            String[] paths = {Environment.getExternalStorageDirectory().toString() + "/" + "test.txt"};
             String[] mimeTypes = {"text/plain"};
 
             try {
@@ -741,18 +742,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 bw.write(text);
                 bw.newLine();
                 for (int storage_val = 0; storage_val <= hori; storage_val++) {
-                    text = ("0" + "\t" + pathLat[storage_val] + "\t" + pathLng[storage_val]);  //途中経路の緯度経度
+                    text = ("0" + "\t" + (String.format("%.5f",pathLat[storage_val])) + "\t" + (String.format("%.5f",pathLng[storage_val])));  //途中経路の緯度経度
                     bw.write(text);
                     bw.newLine();
                 }
-                text = ("0" + "\t" + targetLat+ "\t" + targetLng);                             //目標位置の緯度経度
-                bw.write(text);
-                bw.newLine();
-
+                text = ("0" + "\t" + (String.format("%.5f",targetLat))+ "\t" + (String.format("%.5f",targetLng)));                             //目標位置の緯度経度
                 bw.write(text);
                 bw.newLine();
                 bw.flush();
                 bw.close();
+
             } catch (IOException e) {
                 e.printStackTrace();
 
@@ -761,6 +760,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 public void onScanCompleted(String path, Uri uri) {
                 }
             });
+            Toast.makeText(MapsActivity.this, "保存完了", Toast.LENGTH_SHORT).show();
         }
 
 
