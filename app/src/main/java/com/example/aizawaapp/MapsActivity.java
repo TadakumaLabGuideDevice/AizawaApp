@@ -54,6 +54,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.File;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
@@ -65,6 +66,8 @@ import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
+import java.util.Calendar;
+import java.text.SimpleDateFormat;
 
 import static android.hardware.SensorManager.SENSOR_DELAY_NORMAL;
 
@@ -264,6 +267,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
     }
+
+    public static String GetNowDate() {
+
+        Calendar calendar = Calendar.getInstance();
+        SimpleDateFormat sdf = new SimpleDateFormat("MMdd_HH:mm:ss");
+        String Date = sdf.format(calendar.getTime());
+        return Date;
+    }
+
+
 
 
     //アプリ立ち上げ時
@@ -725,8 +738,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         private void save(){
             //内部ストレージにtxtファイル作成
-            String path = Environment.getExternalStorageDirectory().getPath() + "/" +  "test.txt";
-            String[] paths = {Environment.getExternalStorageDirectory().toString() + "/" + "test.txt"};
+            String gnd = GetNowDate();
+            String path = Environment.getExternalStorageDirectory().getPath() + "/" + gnd +".txt";
+            String[] paths = {Environment.getExternalStorageDirectory().toString() + "/" + gnd + ".txt"};
             String[] mimeTypes = {"text/plain"};
 
             try {
@@ -760,7 +774,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 public void onScanCompleted(String path, Uri uri) {
                 }
             });
-            Toast.makeText(MapsActivity.this, "保存完了", Toast.LENGTH_SHORT).show();
+            Toast.makeText(MapsActivity.this, "保存完了" + GetNowDate(), Toast.LENGTH_SHORT).show();
         }
 
 
