@@ -149,6 +149,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     int startCount = 0;
 
     //座標(緯度・経度)
+    double oneLat = 91158.84;
+    double oneLng = 111263.283;
+
     double currentLat = 37.900401;                 //現在の緯度　GPSによって取得
     double currentLng = 140.103678;                //現在の経度  初期値は大学 6-222室
 
@@ -268,15 +271,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
     }
 
-    public static String GetNowDate() {
+    public static String GetNowDate() {             //現在日時の取得
 
         Calendar calendar = Calendar.getInstance();
         SimpleDateFormat sdf = new SimpleDateFormat("MMdd_HH:mm:ss");
         String Date = sdf.format(calendar.getTime());
         return Date;
     }
-
-
 
 
     //アプリ立ち上げ時
@@ -338,6 +339,18 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         current_Lat.setText(Lat);
         current_Lng.setText(Lng);
 
+        LatLng current_pos = new LatLng(currentLat, currentLng);       //Waypointと現在地を結ぶための線を描きたいけど未完成
+        LatLng target_pos = new LatLng(targetLat, targetLng);
+        ArrayList<LatLng> current_points1 = new ArrayList<>();
+        current_points1.clear();
+        current_points1.add(current_pos);
+        current_points1.add(target_pos);
+        PolylineOptions straight = new PolylineOptions()
+                .addAll(current_points1)
+                .geodesic(false)  // 直線
+                .color(Color.YELLOW)
+                .width(3);
+        mMap.addPolyline(straight);
     }
 
     //GPSによって位置情報が変化した際のイベント
@@ -671,7 +684,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             else if (v.equals(startBt)) start();  //誘導開始用ボタン
             else if (v.equals(stopBt)) stop();    //誘導強制終了用ボタン
             else if (v.equals(voiceBt)) voice();  //音声入力用ボタン
-            else if (v.equals(saveBt)) save();  //音声入力用ボタン
+            else if (v.equals(saveBt)) save();  //データ保存用ボタン
         }
 
 
@@ -721,7 +734,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             mainTimer = null;
             mainTimerTask = null;
 
- /*           if(path_val > hori){
+ /*           if(path_val > hori){                        //stop連打でWaypoint更新
                 currentLat = targetLat;
                 currentLng = targetLng;
             }else{
@@ -738,9 +751,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         private void save(){
             //内部ストレージにtxtファイル作成
-            String gnd = GetNowDate();
-            String path = Environment.getExternalStorageDirectory().getPath() + "/" + gnd +".txt";
-            String[] paths = {Environment.getExternalStorageDirectory().toString() + "/" + gnd + ".txt"};
+            String getNowDate = GetNowDate();
+            String path = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) + "/" + getNowDate +"test.txt";
+            String[] paths = {getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) + "/" + getNowDate + "test.txt"};
             String[] mimeTypes = {"text/plain"};
 
             try {
@@ -832,6 +845,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                             target_deg = target_deg + 360;
                         }
 
+
+
                         txt[0] = "目標点まで" + results[0] + "[m]  角度：" + target_deg;
                         String nowDeg = "" + Deg;
                         Mag.setText(nowDeg);
@@ -878,10 +893,30 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         Mag.setText(nowDeg);
                         statusTx.setText(txt[0]);
 
+/*//誘導方法の変更中...
+                        double closestPointDistance = (Math.abs((pathLng[path_val]*oneLng-pathLng[path_val-1]*oneLng)*currentLat*oneLat+(pathLat[path_val]*oneLat-pathLat[path_val-1]*oneLat)*currentLng*oneLng +(pathLat[path_val]*oneLat*pathLng[path_val-1]*oneLng-pathLat[path_val-1]*oneLat*pathLng[path_val]*oneLng)))
+                                /(Math.sqrt((pathLng[path_val]*oneLng-pathLng[path_val-1]*oneLng)*(pathLng[path_val]*oneLng-pathLng[path_val-1]*oneLng)+(pathLat[path_val]*oneLat-pathLat[path_val-1]*oneLat)*(pathLat[path_val]*oneLat-pathLat[path_val-1]*oneLat)));
+
+
+                        Location.distanceBetween(currentLat, currentLng, targetLat, targetLng, results);
+                        target_deg = (int) results[1] - (int) Deg;       //(Googlemap2点間の角度)　-　(地磁気センサ)
+
+                        if (target_deg > 180) {
+                            target_deg = target_deg - 360;
+                        }
+                        else if(target_deg < -180) {
+                            target_deg = target_deg + 360;
+                        }
+
+                        txt[0] =    "目標点まで" + closestPointDistance + "[m]  角度：" + target_deg;
+                        String nowDeg = "" + Deg;
+                        Mag.setText(nowDeg);
+                        statusTx.setText(txt[0]);*/
+
                         //現在位置と目標マーカーとの距離が2[m]以下になったら目標を次のマーカーへ切り替える
                         if (results[0] < 2.0) {
                             LatLng position = new LatLng(pathLat[path_val], pathLng[path_val]);
-                            options.position(position);
+                            options.position(position);          //更新したマーカーは緑に
                             BitmapDescriptor icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN);
                             options.icon(icon);
                             mMap.addMarker(options);
@@ -916,11 +951,29 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         current_lineOptions.color(Color.RED);
                     }
                     mMap.addPolyline(current_lineOptions);
+
+/*
+                    LatLng current_pos = new LatLng(currentLat, currentLng);       //Waypointと現在地を結ぶための線を描きたいけど未完成
+                    LatLng path_pos = new LatLng(pathLat[path_val], pathLng[path_val]);
+                    ArrayList<LatLng> current_points1 = new ArrayList<>();
+                    current_points1.clear();
+                    current_points1.add(current_pos);
+                    current_points1.add(path_pos);
+                    PolylineOptions straight = new PolylineOptions()
+                            .addAll(current_points1)
+                            .geodesic(false)  // 直線
+                            .color(Color.YELLOW)
+                            .width(3);
+                    current_points1.clear();
+                    mMap.addPolyline(straight);*/
+
                 }
 
             });
+
         }
     }
+
 
 
     //盲導盤へ指令を送るイベント
@@ -941,45 +994,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         else if (22.5 < deg && deg <= 67.5) direction = "4";  //右前
         else if (67.5 < deg) direction = "5";  //右旋回
 
-/*
-        USA = 0;                          //arduino側で1動作を確認して指令
-        if(counter == 0){
-            output = direction;
-            try {
-                mmOutputStream.write(output.getBytes()); //arduino側はString v で受け取る
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            counter++;
-        }
-        if(counter == 1) {
-            try {
-                USA = mmInStream.read();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            if (USA == 1) {
-                output = direction;
-                try {
-                    mmOutputStream.write(output.getBytes()); //arduino側はString v で受け取る
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }*/
-
-/*
-        if(USA == 3*counter){　　　　　　　　　　　　　　　　　　　　　//何カウントに１回指令
-            output = direction;
-            try {
-                mmOutputStream.write(output.getBytes()); //arduino側はString v で受け取る
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            counter++;
-        }
-        USA++;*/
-
         //節電用　呈示する方向が切り替わった時のみ盲導盤へ指令送信
         if (!direction.equals(output) && startCount == 1) {
             output = direction;
@@ -989,6 +1003,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 e.printStackTrace();
             }
         }
+
     }
 
     //ヒュベニの公式
