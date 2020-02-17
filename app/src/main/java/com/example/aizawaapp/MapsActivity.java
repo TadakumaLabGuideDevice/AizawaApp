@@ -166,10 +166,20 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
 
     int path_val;                                  //for文用
-    private float[] results = new float[3];        //GPSによる2点間の距離，角度
+    private float[] results = new float[3];
+    private float[] results1 = new float[3];
+    private float[] results2 = new float[3];
+    private float[] results3 = new float[3];
+    private float[] results4 = new float[3];//GPSによる2点間の距離，角度
     private int target_deg;                        //角度差
     boolean targetFlg = false;                     //目標位置が決まったか判断
     boolean currentFlg = false;                    //現在位置が決まったか判断
+    int objegtDeg;
+    int waypointDeg;
+    double maxDistance = 1.75;
+    double objectDistance;
+    double closestDistance;
+    double guideDistance;
 
 
     //タイマー関連
@@ -411,7 +421,20 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     //音声出力の初期設定(言語，話すスピード等)　ここまで
 
-
+    //任意の点からのメートル位置の緯度経度を取得
+    public static LatLng computeOffset(LatLng from, double distance, double heading) {
+        distance /= 6371009.0D;  //earth_radius = 6371009 # in meters
+        heading = Math.toRadians(heading);
+        double fromLat = Math.toRadians(from.latitude);
+        double fromLng = Math.toRadians(from.longitude);
+        double cosDistance = Math.cos(distance);
+        double sinDistance = Math.sin(distance);
+        double sinFromLat = Math.sin(fromLat);
+        double cosFromLat = Math.cos(fromLat);
+        double sinLat = cosDistance * sinFromLat + sinDistance * cosFromLat * Math.cos(heading);
+        double dLng = Math.atan2(sinDistance * cosFromLat * Math.sin(heading), cosDistance - sinFromLat * sinLat);
+        return new LatLng(Math.toDegrees(Math.asin(sinLat)), Math.toDegrees(fromLng + dLng));
+    }
 
     //マップタッチによる割り込み　ここから
     //タッチ1度目…目的地指定(デバッグ用)
@@ -840,11 +863,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
                         if (target_deg > 180) {
                             target_deg = target_deg - 360;
-                        }
-                        else if(target_deg < -180) {
+                        } else if (target_deg < -180) {
                             target_deg = target_deg + 360;
                         }
-
 
 
                         txt[0] = "目標点まで" + results[0] + "[m]  角度：" + target_deg;
@@ -870,14 +891,70 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                 mainTimer = null;
                                 mainTimerTask = null;
                             }
-                        }
-                        else {
+                        } else {
                             if (connectFlg) outputToDevice(target_deg);
                         }
-                    }
+                    } else if (path_val == 0) {
+                        Location.distanceBetween(currentLat, currentLng, startLat, startLng, results1);
+                        Location.distanceBetween(currentLat, currentLng, pathLat[path_val], pathLng[path_val], results2);
+                        Location.distanceBetween(startLat, startLng, pathLat[path_val], pathLng[path_val], results3);
+                        Location.distanceBetween(startLat, startLng, currentLat, currentLng, results4);
+                        objegtDeg = Math.abs((int) results1[1] - (int) results2[1]);
+                        if (objegtDeg > 180) objegtDeg = 360 - objegtDeg;
+                        waypointDeg = Math.abs((int) results3[1] - (int) results4[1]);
+                        if (waypointDeg > 180) waypointDeg = 360 - waypointDeg;
+                        objectDistance = results2[0] * Math.cos(Math.toRadians(objegtDeg)) / Math.sin(Math.toRadians(waypointDeg));//被験者から経路までの距離
+                        closestDistance = results1[0] * Math.cos(Math.toRadians(waypointDeg));//前のWaypointから最近点までの距離
+                        //前のWaypointから誘導点までの距離
+                        if (objectDistance <= maxDistance) {
+                            guideDistance = closestDistance + (maxDistance - objectDistance);
+                        } else
+                            guideDistance = closestDistance;
+                        if (guideDistance > results3[0]) {
+                            guideDistance = results3[0];
+                        }
+                        LatLng guidePoint = computeOffset(new LatLng(startLat, startLng), guideDistance, results3[1]);//誘導点の座標
 
-                    else {  //ルート検索で作成した経路を通過中の際、ここら辺をいじる
-                        Location.distanceBetween(currentLat, currentLng, pathLat[path_val], pathLng[path_val], results);
+                        Location.distanceBetween(currentLat, currentLng, guidePoint.latitude, guidePoint.longitude, results);
+                        target_deg = (int) results[1] - (int) Deg;       //(Googlemap2点間の角度)　-　(地磁気センサ)
+
+                        if (target_deg > 180) {
+                            target_deg = target_deg - 360;
+                        } else if (target_deg < -180) {
+                            target_deg = target_deg + 360;
+                        }
+
+                        LatLng current_pos = new LatLng(currentLat, currentLng);
+                        ArrayList<LatLng> current_points1 = new ArrayList<>();
+                        current_points1.clear();
+                        current_points1.add(current_pos);
+                        current_points1.add(guidePoint);
+                        PolylineOptions straight = new PolylineOptions().addAll(current_points1)
+                                .geodesic(false)  // 直線
+                                .color(Color.GREEN)
+                                .width(3);
+                        mMap.addPolyline(straight);
+                        txt[0] = "目標点まで" + "[m]  角度：" + objegtDeg + "," + waypointDeg + "," + target_deg;
+                        String nowDeg = "" + Deg;
+                        Mag.setText(nowDeg);
+                        statusTx.setText(txt[0]);
+
+                        LatLng closestPoint = computeOffset(new LatLng(startLat, startLng), closestDistance, results3[1]);//最近点の座標
+                        Location.distanceBetween(pathLat[path_val], pathLng[path_val], closestPoint.latitude, closestPoint.longitude, results);//最近点からWaypointまでの距離
+
+                        //最近点と目標マーカーとの距離が0.75[m]以下になったら目標を次のマーカーへ切り替える
+                        if (results[0] < 0.75) {
+                            LatLng position = new LatLng(pathLat[path_val], pathLng[path_val]);
+                            options.position(position);          //更新したマーカーは緑に
+                            BitmapDescriptor icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN);
+                            options.icon(icon);
+                            mMap.addMarker(options);
+                            path_val++;  //次のマーカーの更新
+                        } else {
+                            if (connectFlg) outputToDevice(target_deg);
+                        }
+                    } else {  //ルート検索で作成した経路を通過中の際、ここら辺をいじる
+                       /* Location.distanceBetween(currentLat, currentLng, pathLat[path_val], pathLng[path_val], results);
                         target_deg = (int) results[1] - (int) Deg;                                                          //(Googlemap2点間の角度)　-　(加速度・地磁気センサ)
 
                         if (target_deg > 180) {
@@ -891,14 +968,31 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         txt[0] =    "目標点まで" + results[0] + "[m]  角度：" + target_deg;
                         String nowDeg = "" + Deg;
                         Mag.setText(nowDeg);
-                        statusTx.setText(txt[0]);
+                        statusTx.setText(txt[0]);*/
 
-/*//誘導方法の変更中...
-                        double closestPointDistance = (Math.abs((pathLng[path_val]*oneLng-pathLng[path_val-1]*oneLng)*currentLat*oneLat+(pathLat[path_val]*oneLat-pathLat[path_val-1]*oneLat)*currentLng*oneLng +(pathLat[path_val]*oneLat*pathLng[path_val-1]*oneLng-pathLat[path_val-1]*oneLat*pathLng[path_val]*oneLng)))
-                                /(Math.sqrt((pathLng[path_val]*oneLng-pathLng[path_val-1]*oneLng)*(pathLng[path_val]*oneLng-pathLng[path_val-1]*oneLng)+(pathLat[path_val]*oneLat-pathLat[path_val-1]*oneLat)*(pathLat[path_val]*oneLat-pathLat[path_val-1]*oneLat)));
+//誘導方法の変更中...
 
+                        Location.distanceBetween(currentLat, currentLng, pathLat[path_val-1], pathLng[path_val-1], results1);
+                        Location.distanceBetween(currentLat, currentLng, pathLat[path_val], pathLng[path_val], results2);
+                        Location.distanceBetween(pathLat[path_val-1], pathLng[path_val-1], pathLat[path_val], pathLng[path_val], results3);
+                        Location.distanceBetween( pathLat[path_val-1], pathLng[path_val-1],  currentLat, currentLng, results4);
+                        objegtDeg = Math.abs((int)results1[1] - (int)results2[1]);
+                        if (objegtDeg > 180)objegtDeg = 360 - objegtDeg;
+                        waypointDeg = Math.abs((int)results3[1] - (int)results4[1]);
+                        if (waypointDeg > 180)waypointDeg = 360 - waypointDeg;
+                        objectDistance = results2[0] * Math.cos(Math.toRadians(objegtDeg)) / Math.sin(Math.toRadians(waypointDeg));//被験者から経路までの距離
+                        closestDistance = results1[0] * Math.cos(Math.toRadians(waypointDeg));//前のWaypointから最近点までの距離
+                        //前のWaypointから誘導点までの距離
+                        if(objectDistance <= maxDistance){
+                            guideDistance = closestDistance + (maxDistance - objectDistance);
+                        }else
+                            guideDistance = closestDistance;
+                        if(guideDistance > results3[0]){
+                            guideDistance = results3[0];
+                        }
+                        LatLng guidePoint = computeOffset(new LatLng(pathLat[path_val-1] , pathLng[path_val-1]), guideDistance, results3[1]);//誘導点の座標
 
-                        Location.distanceBetween(currentLat, currentLng, targetLat, targetLng, results);
+                        Location.distanceBetween(currentLat, currentLng, guidePoint.latitude , guidePoint.longitude , results);
                         target_deg = (int) results[1] - (int) Deg;       //(Googlemap2点間の角度)　-　(地磁気センサ)
 
                         if (target_deg > 180) {
@@ -908,13 +1002,28 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                             target_deg = target_deg + 360;
                         }
 
-                        txt[0] =    "目標点まで" + closestPointDistance + "[m]  角度：" + target_deg;
+                        LatLng current_pos = new LatLng(currentLat , currentLng);
+                        ArrayList<LatLng> current_points1 = new ArrayList<>();
+                        current_points1.clear();
+                        current_points1.add(current_pos);
+                        current_points1.add(guidePoint);
+                        PolylineOptions straight = new PolylineOptions()
+                                .addAll(current_points1)
+                                .geodesic(false)  // 直線
+                                .color(Color.GREEN)
+                                .width(3);
+                        mMap.addPolyline(straight);
+
+                        txt[0] =    "目標点まで"  + "[m]  角度：" + objegtDeg + "," + waypointDeg + "," + target_deg ;
                         String nowDeg = "" + Deg;
                         Mag.setText(nowDeg);
-                        statusTx.setText(txt[0]);*/
+                        statusTx.setText(txt[0]);
 
-                        //現在位置と目標マーカーとの距離が2[m]以下になったら目標を次のマーカーへ切り替える
-                        if (results[0] < 2.0) {
+                        LatLng closestPoint = computeOffset(new LatLng(pathLat[path_val-1] , pathLng[path_val-1]), closestDistance , results3[1]);//最近点の座標
+                        Location.distanceBetween(pathLat[path_val], pathLng[path_val], closestPoint.latitude , closestPoint.longitude , results);//最近点からWaypointまでの距離
+
+                        //最近点と目標マーカーとの距離が0.75[m]以下になったら目標を次のマーカーへ切り替える
+                        if (results[0] < 0.75) {
                             LatLng position = new LatLng(pathLat[path_val], pathLng[path_val]);
                             options.position(position);          //更新したマーカーは緑に
                             BitmapDescriptor icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN);
