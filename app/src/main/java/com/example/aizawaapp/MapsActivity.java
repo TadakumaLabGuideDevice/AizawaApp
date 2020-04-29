@@ -55,6 +55,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.File;
+import java.io.Serializable;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
@@ -143,7 +144,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     OutputStream mmOutputStream = null;
     InputStream mmInStream = null;
     boolean connectFlg = false ;                  //盲導盤との接続状態
-    String output = null;                         //盲導盤への指令　節電用に用いる
+    char output = 0;                         //盲導盤への指令　節電用に用いる
     int USA = 0;
     int counter = 0;
     int startCount = 0;
@@ -164,7 +165,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     double[] pathLat = new double[10000];          //ルート検索で取得した経路の緯度
     double[] pathLng = new double [10000];         //ルート検索で取得した経路の経度
 
-
+    int acounts = 0;
     int path_val;                                  //for文用
     private float[] results = new float[3];
     private float[] results1 = new float[3];
@@ -444,9 +445,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         public void onMapClick(LatLng point) {
             if(currentFlg){                              //2回タッチすると目的地再設定 　currentFlgがtrueならこの処理
                 startCount = 0;
-                output = "0";     //盲導盤停止
+                output = 0;     //盲導盤停止
                 try {
-                    mmOutputStream.write(output.getBytes()); //arduino側はchar v で受け取る
+                    mmOutputStream.write(output); //arduino側はchar v で受け取る
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -780,9 +781,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 currentLat = pathLat[path_val];
                 currentLng = pathLng[path_val];
             }*/
-            output = "0";     //盲導盤停止
+            output = 0;     //盲導盤停止
             try {
-                mmOutputStream.write(output.getBytes()); //arduino側はchar v で受け取る
+                mmOutputStream.write(output); //arduino側はchar v で受け取る
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -872,6 +873,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             final String[] txt = new String[1];
             timerHandler.post(new Runnable() {
                 public void run() {
+
                     float Deg = sensorChangeEvent.Deg;//results[0]…2点間の距離　　results[1]…2点間の角度
                     if (path_val > hori) {                     //ルート検索によって作成した経路を通り終えた際(最後の目的地までの誘導)
                         Location.distanceBetween(currentLat, currentLng, targetLat, targetLng, results);
@@ -925,9 +927,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         if (objectDistance <= maxDistance) {
                             guideDistance = closestDistance + (maxDistance - objectDistance);
                         } else
-                            guideDistance = closestDistance;
                         if (guideDistance > results3[0]) {
+                            guideDistance = closestDistance;
                             guideDistance = results3[0];
+
                         }
                         LatLng guidePoint = computeOffset(new LatLng(startLat, startLng), guideDistance, results3[1]);//誘導点の座標
 
@@ -966,7 +969,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         } else {
                             if (connectFlg) outputToDevice(target_deg);
                         }
-                        txt[0] = "目標点まで" + results5[0] + "[m]  角度：" + target_deg;
+                        txt[0] = "目標点まで" + (String.format("%.5f",results5[0] ))+ "[m]  角度：" + target_deg + "..." +acounts;
                         String nowDeg = "" + Deg;
                         Mag.setText(nowDeg);
                         statusTx.setText(txt[0]);
@@ -1100,10 +1103,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
 
-
+    int counter2 = 0;
     //盲導盤へ指令を送るイベント
     public void outputToDevice(int deg) {
-        String direction = null;
+        char direction = 0;
 /*
         //角度によって呈示する方向を選択                   呈示する方向
         if (deg < -45) direction = "1";  //左旋回
@@ -1113,23 +1116,52 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         else if (45 < deg) direction = "5";  //右旋回
 */
         //角度によって呈示する方向を選択                   呈示する方向　盲導盤第3試作機（会沢用）
-        if (deg < -67.5) direction = "1";  //左旋回
-        else if (-67.5 <= deg && deg < -22.5) direction = "2";  //左前
-        else if (-22.5 <= deg && deg <= 22.5) direction = "3";  //前　
-        else if (22.5 < deg && deg <= 67.5) direction = "4";  //右前
-        else if (67.5 < deg) direction = "5";  //右旋回
+        if (deg < -67.5) direction = 1;  //左旋回
+        else if (-67.5 <= deg && deg < -22.5) direction = 2;  //左前
+        else if (-22.5 <= deg && deg <= 22.5) direction = 3;  //前　
+        else if (22.5 < deg && deg <= 67.5) direction = 4;  //右前
+        else if (67.5 < deg) direction = 5;  //右旋回
 
         //節電用　呈示する方向が切り替わった時のみ盲導盤へ指令送信
-        if (!direction.equals(output) && startCount == 1) {
+       if (/*!direction.equals(output) &&*/ startCount == 1) {
+            output = direction;
+            try {
+                mmOutputStream.write(output); //arduino側はchar v で受け取る
+                acounts++;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+/*
+        if(counter == 0 && startCount == 1){
             output = direction;
             try {
                 mmOutputStream.write(output.getBytes()); //arduino側はchar v で受け取る
             } catch (IOException e) {
                 e.printStackTrace();
             }
+            counter++;
         }
+        if(counter == 1 && startCount == 1){
 
+            try {
+                USA = mmInStream.read(); //arduino側はchar v で受け取る
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            if(USA == 1) {
+                output = direction;
+                try {
+                    mmOutputStream.write(output.getBytes()); //arduino側はchar v で受け取る
+                    acounts++;
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }*/
     }
+
 
     //ヒュベニの公式
    /*public static double deg2rad(double deg){
