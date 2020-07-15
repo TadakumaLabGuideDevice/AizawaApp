@@ -927,8 +927,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         if (objectDistance <= maxDistance) {
                             guideDistance = closestDistance + (maxDistance - objectDistance);
                         } else
-                        if (guideDistance > results3[0]) {
                             guideDistance = closestDistance;
+                        if (guideDistance > results3[0]) {
                             guideDistance = results3[0];
 
                         }
