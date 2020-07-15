@@ -144,7 +144,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     OutputStream mmOutputStream = null;
     InputStream mmInStream = null;
     boolean connectFlg = false ;                  //盲導盤との接続状態
-    char output = 0;                         //盲導盤への指令　節電用に用いる
+    String output = null;                         //盲導盤への指令　節電用に用いる
     int USA = 0;
     int counter = 0;
     int startCount = 0;
@@ -153,8 +153,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     double oneLat = 91158.84;
     double oneLng = 111263.283;
 
-    double currentLat = 37.900401;                 //現在の緯度　GPSによって取得
-    double currentLng = 140.103678;                //現在の経度  初期値は大学 6-222室
+    double currentLat ; //37.900401;                 //現在の緯度　GPSによって取得
+    double currentLng ; //140.103678;                //現在の経度  初期値は大学 6-222室
 
     double targetLat;                              //目的地の緯度　タッチor音声入力で設定
     double targetLng;                              //目的地の経度
@@ -324,8 +324,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         //自動で山形大工学部6-222付近まで移動
         //CameraPosition cameraPos = new CameraPosition.Builder().target(new LatLng(37.900401, 140.103678)).zoom(18.0F).bearing(0).build();
         mMap = googleMap;
-        LatLng firstPosition = new LatLng(37.900401, 140.103678);
-        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(firstPosition, 18));
+        //LatLng firstPosition = new LatLng(37.900401 , 140.103678);  //37.900401 , 140.103678
+        //mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(firstPosition, 18));
 
         //パーミッションの確認
         UiSettings uiSettings = mMap.getUiSettings();
@@ -350,6 +350,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         current_Lat.setText(Lat);
         current_Lng.setText(Lng);
 /*
+        LatLng firstPosition = new LatLng(currentLat, currentLng);  //37.900401 , 140.103678
+        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(firstPosition, 18));
+*/
+
+/*
         LatLng current_pos = new LatLng(currentLat, currentLng);       //Waypointと現在地を結ぶための線を描きたいけど未完成
         LatLng target_pos = new LatLng(targetLat, targetLng);
         ArrayList<LatLng> current_points1 = new ArrayList<>();
@@ -367,6 +372,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     //GPSによって位置情報が変化した際のイベント
     @Override
     public void onLocationChanged(Location location) {
+
 
     }
 
@@ -445,9 +451,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         public void onMapClick(LatLng point) {
             if(currentFlg){                              //2回タッチすると目的地再設定 　currentFlgがtrueならこの処理
                 startCount = 0;
-                output = 0;     //盲導盤停止
+                output = "0";     //盲導盤停止
                 try {
-                    mmOutputStream.write(output); //arduino側はchar v で受け取る
+                    mSocket.connect();
+                    mmInStream = mSocket.getInputStream();
+                    mmOutputStream = mSocket.getOutputStream();
+                    mmOutputStream.write(output.getBytes()); //arduino側はchar v で受け取る
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -461,6 +470,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     mainTimerTask = null;
                     hori = 0;
                 }
+
             }
             else{                                               //
                 markerPoints.add(point);
@@ -747,6 +757,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         connectFlg = false;
                     }
                 }
+            } else if(connectFlg){  //再接続
+                try{
+                    mmOutputStream.write("0".getBytes());
+                    //startCount = 0;
+                    mSocket.close();
+                    bluetoothState.setText("cancel");
+                    connectFlg = false;
+                }catch (Exception e){
+                    connectFlg = true;
+                }
             }
         }
 
@@ -781,12 +801,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 currentLat = pathLat[path_val];
                 currentLng = pathLng[path_val];
             }*/
-            output = 0;     //盲導盤停止
-            try {
-                mmOutputStream.write(output); //arduino側はchar v で受け取る
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+
+
         }
 
         private void save(){
@@ -969,7 +985,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         } else {
                             if (connectFlg) outputToDevice(target_deg);
                         }
-                        txt[0] = "目標点まで" + (String.format("%.5f",results5[0] ))+ "[m]  角度：" + target_deg + "..." +acounts;
+                        txt[0] = "目標点まで" + (String.format("%.5f",results5[0] ))+ "[m]  角度：" + target_deg + "..." +output+startCount;
                         String nowDeg = "" + Deg;
                         Mag.setText(nowDeg);
                         statusTx.setText(txt[0]);
@@ -1050,7 +1066,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         else {
                             if (connectFlg) outputToDevice(target_deg);
                         }
-                        txt[0] = "目標点まで" + results5[0] + "[m]  角度：" + target_deg;
+                        txt[0] = "目標点まで" + results5[0] + "[m]  角度：" + target_deg+ "..." +output+startCount;
                         String nowDeg = "" + Deg;
                         Mag.setText(nowDeg);
                         statusTx.setText(txt[0]);
@@ -1106,7 +1122,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     int counter2 = 0;
     //盲導盤へ指令を送るイベント
     public void outputToDevice(int deg) {
-        char direction = 0;
+        String direction = null;
 /*
         //角度によって呈示する方向を選択                   呈示する方向
         if (deg < -45) direction = "1";  //左旋回
@@ -1116,22 +1132,37 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         else if (45 < deg) direction = "5";  //右旋回
 */
         //角度によって呈示する方向を選択                   呈示する方向　盲導盤第3試作機（会沢用）
-        if (deg < -67.5) direction = 1;  //左旋回
-        else if (-67.5 <= deg && deg < -22.5) direction = 2;  //左前
-        else if (-22.5 <= deg && deg <= 22.5) direction = 3;  //前　
-        else if (22.5 < deg && deg <= 67.5) direction = 4;  //右前
-        else if (67.5 < deg) direction = 5;  //右旋回
+        if (deg < -67.5) direction = "1";  //左旋回
+        else if (-67.5 <= deg && deg < -22.5) direction = "2";  //左前
+        else if (-22.5 <= deg && deg <= 22.5) direction = "3";  //前　
+        else if (22.5 < deg && deg <= 67.5) direction = "4";  //右前
+        else if (67.5 < deg) direction = "5";  //右旋回
 
         //節電用　呈示する方向が切り替わった時のみ盲導盤へ指令送信
-       if (/*!direction.equals(output) &&*/ startCount == 1) {
+       if (/*!direction.equals(output)&& */startCount == 1) {
             output = direction;
             try {
-                mmOutputStream.write(output); //arduino側はchar v で受け取る
+                mSocket.connect();
+                mmInStream = mSocket.getInputStream();
+                mmOutputStream = mSocket.getOutputStream();
+                mmOutputStream.write(output.getBytes()); //arduino側はchar v で受け取る
                 acounts++;
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
+
+       if(startCount == 0){
+           output = "0";
+           try {
+               mSocket.connect();
+               mmInStream = mSocket.getInputStream();
+               mmOutputStream = mSocket.getOutputStream();
+               mmOutputStream.write(output.getBytes()); //arduino側はchar v で受け取る
+           } catch (IOException e) {
+               e.printStackTrace();
+           }
+       }
 
 /*
         if(counter == 0 && startCount == 1){
